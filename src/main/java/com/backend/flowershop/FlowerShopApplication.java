@@ -1,4 +1,4 @@
-package com.backend.flowerShop;
+package com.backend.flowershop;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
