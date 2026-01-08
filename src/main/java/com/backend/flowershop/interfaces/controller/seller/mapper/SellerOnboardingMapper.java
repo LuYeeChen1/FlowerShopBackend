@@ -44,20 +44,28 @@ public class SellerOnboardingMapper {
 
     public SellerOnboardingResponse toResponse(SellerOnboarding onboarding) {
         SellerProfile p = onboarding.profile();
-        Address a = p.address();
+        Address a = p == null ? null : p.address();
 
         List<SellerOnboardingResponse.DocumentDto> docs = new ArrayList<>();
-        for (SellerDocument d : onboarding.documents()) {
-            docs.add(new SellerOnboardingResponse.DocumentDto(d.type(), d.number(), d.url()));
+        List<SellerDocument> sourceDocs = onboarding.documents();
+        if (sourceDocs != null) {
+            for (SellerDocument d : sourceDocs) {
+                docs.add(new SellerOnboardingResponse.DocumentDto(d.type(), d.number(), d.url()));
+            }
         }
 
         return new SellerOnboardingResponse(
                 onboarding.userSub(),
-                onboarding.status().name(),
-                p.companyName(),
-                p.phone(),
+                onboarding.status() == null ? null : onboarding.status().name(),
+                p == null ? null : p.companyName(),
+                p == null ? null : p.phone(),
                 new SellerOnboardingResponse.AddressDto(
-                        a.line1(), a.line2(), a.city(), a.state(), a.postcode(), a.country()
+                        a == null ? null : a.line1(),
+                        a == null ? null : a.line2(),
+                        a == null ? null : a.city(),
+                        a == null ? null : a.state(),
+                        a == null ? null : a.postcode(),
+                        a == null ? null : a.country()
                 ),
                 docs
         );

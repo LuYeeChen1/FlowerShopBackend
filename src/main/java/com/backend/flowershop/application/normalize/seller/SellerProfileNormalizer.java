@@ -25,14 +25,17 @@ public class SellerProfileNormalizer {
         if (input == null) return null;
 
         Address a = input.address();
-        Address na = new Address(
-                textNormalizer.normalize(a.line1()),
-                textNormalizer.normalize(a.line2()),
-                textNormalizer.normalize(a.city()),
-                textNormalizer.normalize(a.state()),
-                textNormalizer.normalize(a.postcode()),
-                textNormalizer.normalize(a.country())
-        );
+        Address na = null;
+        if (a != null) {
+            na = new Address(
+                    textNormalizer.normalize(a.line1()),
+                    textNormalizer.normalize(a.line2()),
+                    textNormalizer.normalize(a.city()),
+                    textNormalizer.normalize(a.state()),
+                    textNormalizer.normalize(a.postcode()),
+                    textNormalizer.normalize(a.country())
+            );
+        }
 
         return new SellerProfile(
                 textNormalizer.normalize(input.companyName()),
