@@ -14,14 +14,14 @@
 
 interfaces/
 └─ controller
+validation/
+├─ rules （interface only）
+└─ ruleimpl （validate only）
 application/
 ├─ service
 ├─ port / usecase
 ├─ normalize
 ├─ pipeline
-├─ validator
-├─ rules （interface only）
-└─ ruleimpl （validate only）
 domain/
 ├─ model
 └─ error
@@ -44,11 +44,14 @@ infrastructure/
 
 ## Rule 系统（已实现，冻结）
 
-### rules
+### validation
+- ValidationError / ValidationResult 统一放在这里
+
+### validation/rules
 - 只允许 interface
 - 不写任何 validate 逻辑
 
-### ruleimpl
+### validation/ruleimpl
 - 所有 validate 必须集中在此
 - 每个类：
     - 必须使用 `@Order(X)`
@@ -69,6 +72,7 @@ infrastructure/
     - controller
     - service
     - normalize
+    - infrastructure（除非通过 validation/ruleimpl 调用）
 - 能用 record 就用
 - 能用 @Component / @Bean 就用
 - 每个 class 一个 file
