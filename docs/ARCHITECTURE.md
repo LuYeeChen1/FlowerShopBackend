@@ -68,11 +68,11 @@ infrastructure/
 ## 技术约束（冻结）
 
 - Controller 必须最薄
-- validate 禁止出现在：
+- validate 禁止出现在（除非通过 validation/ruleimpl 调用）：
     - controller
     - service
     - normalize
-    - infrastructure（除非通过 validation/ruleimpl 调用）
+    - infrastructure
 - 能用 record 就用
 - 能用 @Component / @Bean 就用
 - 每个 class 一个 file
