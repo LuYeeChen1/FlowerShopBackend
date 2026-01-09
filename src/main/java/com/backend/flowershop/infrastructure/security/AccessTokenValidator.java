@@ -15,11 +15,18 @@ public class AccessTokenValidator implements OAuth2TokenValidator<Jwt> {
     @Override
     public OAuth2TokenValidatorResult validate(Jwt token) {
         String tokenUse = token.getClaimAsString("token_use");
-        String tokenClientId = token.getClaimAsString("client_id");
-        if ("access".equals(tokenUse) && clientId.equals(tokenClientId)) {
-            return OAuth2TokenValidatorResult.success();
+        if (!"access".equals(tokenUse)) {
+            return invalidToken("Token use must be access");
         }
-        OAuth2Error error = new OAuth2Error("invalid_token", "Invalid access token", null);
+        String tokenClientId = token.getClaimAsString("client_id");
+        if (!clientId.equals(tokenClientId)) {
+            return invalidToken("Invalid access token client_id");
+        }
+        return OAuth2TokenValidatorResult.success();
+    }
+
+    private OAuth2TokenValidatorResult invalidToken(String message) {
+        OAuth2Error error = new OAuth2Error("invalid_token", message, null);
         return OAuth2TokenValidatorResult.failure(error);
     }
 }
