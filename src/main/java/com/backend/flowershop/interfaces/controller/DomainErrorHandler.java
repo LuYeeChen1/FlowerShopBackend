@@ -13,6 +13,7 @@ public class DomainErrorHandler {
     @ExceptionHandler(DomainErrorException.class)
     public ResponseEntity<ErrorResponse> handleDomainError(DomainErrorException ex) {
         ErrorResponse response = new ErrorResponse(ex.code(), ex.getMessage());
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        HttpStatus status = "VALIDATION_ERROR".equals(ex.code()) ? HttpStatus.BAD_REQUEST : HttpStatus.INTERNAL_SERVER_ERROR;
+        return ResponseEntity.status(status).body(response);
     }
 }
