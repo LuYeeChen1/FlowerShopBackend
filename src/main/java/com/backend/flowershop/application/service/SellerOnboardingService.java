@@ -9,6 +9,7 @@ import com.backend.flowershop.domain.model.SellerContact;
 import com.backend.flowershop.domain.model.SellerOnboarding;
 import com.backend.flowershop.domain.model.SellerOnboardingId;
 import com.backend.flowershop.domain.model.SellerOnboardingStatus;
+import com.backend.flowershop.validation.SellerOnboardingValidation;
 import com.backend.flowershop.validation.SellerOnboardingValidator;
 import com.backend.flowershop.validation.ValidationError;
 import com.backend.flowershop.validation.ValidationResult;
@@ -37,17 +38,19 @@ public class SellerOnboardingService implements SellerOnboardingUseCase {
 
     @Override
     public SellerOnboarding submit(SellerOnboardingCommand command) {
-        ValidationResult validationResult = validator.validate(command);
+        SellerOnboardingValidation validation = validator.validate(command);
+        ValidationResult validationResult = validation.result();
         if (!validationResult.isValid()) {
             throw new DomainErrorException(VALIDATION_ERROR_CODE, buildValidationMessage(validationResult));
         }
+        SellerOnboardingCommand normalizedCommand = validation.command();
         SellerOnboarding onboarding = new SellerOnboarding(
                 SellerOnboardingId.newId(),
-                normalize(command.storeName()),
+                normalizedCommand.storeName(),
                 new SellerContact(
-                        normalize(command.contactName()),
-                        normalize(command.contactEmail()),
-                        normalize(command.contactPhone())
+                        normalizedCommand.contactName(),
+                        normalizedCommand.contactEmail(),
+                        normalizedCommand.contactPhone()
                 ),
                 SellerOnboardingStatus.PENDING_REVIEW,
                 OffsetDateTime.now(ZoneOffset.UTC)
@@ -55,14 +58,6 @@ public class SellerOnboardingService implements SellerOnboardingUseCase {
         repository.save(onboarding);
         lambdaPort.invoke(onboarding);
         return onboarding;
-    }
-
-    private String normalize(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isBlank() ? null : trimmed;
     }
 
     private String buildValidationMessage(ValidationResult result) {
