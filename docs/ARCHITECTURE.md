@@ -65,6 +65,7 @@ infrastructure/
 
 * **唯一允许写 validate 的地方**
 * 用于规则化校验（Rule-based Validation）
+* normalization **必须集中在 validation 下的独立 package**，由 validator 负责调度 normalization 与 rules pipeline
 * ❌ 不包含业务流程
 * ❌ 不做流程编排
 
@@ -190,4 +191,3 @@ SL020.java
     * 新增内容
     * 在不破坏既有规则的前提下扩展
 * ❌ 禁止修改既有分层、职责与依赖方向
-

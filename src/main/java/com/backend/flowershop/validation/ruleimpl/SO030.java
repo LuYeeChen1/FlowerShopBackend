@@ -15,18 +15,10 @@ public class SO030 implements SellerOnboardingRule {
     @Override
     public ValidationResult validate(SellerOnboardingCommand input) {
         ValidationResult result = new ValidationResult();
-        String phone = normalize(input.contactPhone());
+        String phone = input.contactPhone();
         if (phone != null && !PHONE_PATTERN.matcher(phone).matches()) {
             result.addError("invalid_phone", "Contact phone format is invalid.");
         }
         return result;
-    }
-
-    private String normalize(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isBlank() ? null : trimmed;
     }
 }
