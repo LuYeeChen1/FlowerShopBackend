@@ -1,12 +1,12 @@
 package com.backend.flowershop.application.service;
 
-import com.backend.flowershop.application.dto.FlowerDTO;
+// 引入新的 DTO 类名
+import com.backend.flowershop.application.dto.response.FlowerDTOResponse;
 import com.backend.flowershop.domain.model.Flower;
 import com.backend.flowershop.domain.repository.FlowerRepository;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 public class FlowerService {
@@ -17,19 +17,19 @@ public class FlowerService {
         this.flowerRepository = flowerRepository;
     }
 
-    public List<FlowerDTO> getPublicFlowerCatalog() {
-        // 1. 获取领域实体列表
-        List<Flower> flowers = flowerRepository.findAllPublic();
-
-        // 2. 转换逻辑：List<Entity> -> List<DTO>
-        return flowers.stream()
-                .map(this::toDTO)
-                .collect(Collectors.toList());
+    /**
+     * 返回类型已更新为: List<FlowerDTOResponse>
+     */
+    public List<FlowerDTOResponse> getPublicFlowerCatalog() {
+        return flowerRepository.findAllPublic()
+                .stream()
+                .map(this::toResponse) // 调用下方的辅助方法
+                .toList();
     }
 
-    // 简单的内部映射方法
-    private FlowerDTO toDTO(Flower flower) {
-        return new FlowerDTO(
+    // 辅助映射方法
+    private FlowerDTOResponse toResponse(Flower flower) {
+        return new FlowerDTOResponse(
                 flower.getId(),
                 flower.getName(),
                 flower.getDescription(),

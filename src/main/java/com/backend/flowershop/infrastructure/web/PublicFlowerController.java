@@ -1,6 +1,6 @@
 package com.backend.flowershop.infrastructure.web;
 
-import com.backend.flowershop.application.dto.FlowerDTO; // 导入 DTO
+import com.backend.flowershop.application.dto.response.FlowerDTOResponse; // Updated Import
 import com.backend.flowershop.application.service.FlowerService;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
@@ -16,9 +16,8 @@ public class PublicFlowerController {
         this.flowerService = flowerService;
     }
 
-    // 返回类型变为 List<FlowerDTO>
     @GetMapping
-    public List<FlowerDTO> getAllFlowers() {
+    public List<FlowerDTOResponse> getAllFlowers() {
         return flowerService.getPublicFlowerCatalog();
     }
 }

@@ -1,6 +1,7 @@
 package com.backend.flowershop.application.service;
 
-import com.backend.flowershop.application.dto.UserDTO;
+// 引入新的 DTO 类名
+import com.backend.flowershop.application.dto.response.UserDTOResponse;
 import com.backend.flowershop.domain.model.User;
 import com.backend.flowershop.domain.repository.UserRepository;
 import org.springframework.stereotype.Service;
@@ -17,22 +18,22 @@ public class UserService {
     }
 
     /**
-     * Use Case: 同步 Cognito 用户
-     * @return UserDTO (不再返回 User 实体)
+     * Use Case: 同步用户
+     * 返回类型已更新为: UserDTOResponse
      */
-    public UserDTO syncCognitoUser(String id, String email, String username, List<String> cognitoGroups) {
-        // 1. 业务逻辑：解析角色
+    public UserDTOResponse syncCognitoUser(String id, String email, String username, List<String> cognitoGroups) {
+        // 1. 业务逻辑
         String role = "CUSTOMER";
         if (cognitoGroups != null && !cognitoGroups.isEmpty()) {
             role = cognitoGroups.get(0);
         }
 
-        // 2. 业务处理：构建并保存领域实体
+        // 2. 领域操作
         User user = new User(id, email, username, role);
         userRepository.save(user);
 
-        // 3. 转换逻辑：Domain Entity -> DTO
-        return new UserDTO(
+        // 3. 转换为 Response DTO
+        return new UserDTOResponse(
                 user.getId(),
                 user.getEmail(),
                 user.getUsername(),
