@@ -8,6 +8,10 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 
+/**
+ * [Infrastructure Layer] Web 控制器
+ * 仅负责处理 DTO 的 HTTP 映射，不包含业务逻辑 [cite: 161, 163, 187]。
+ */
 @RestController
 @RequestMapping("/api/seller")
 public class SellerController {
@@ -19,26 +23,33 @@ public class SellerController {
     }
 
     /**
-     * 提交卖家申请
-     * Endpoint: POST /api/seller/apply
-     * Header: Authorization: Bearer <token>
+     * 获取申请状态：解决 ResponseEntity::ok 歧义错误
      */
+    @GetMapping("/status")
+    public ResponseEntity<String> getApplicationStatus(@AuthenticationPrincipal Jwt jwt) {
+        String userId = jwt.getClaimAsString("sub"); // 安全提取 Cognito ID [cite: 187]
+
+        // 使用 Lambda 显式指定 ok(T) 的重载版本，消除编译歧义
+        return sellerService.getStatus(userId)
+                .map(status -> ResponseEntity.ok(status))
+                .orElse(ResponseEntity.ok("NONE"));
+    }
+
     @PostMapping("/apply")
-    public ResponseEntity<String> applyForSeller(
-            @AuthenticationPrincipal Jwt jwt, // 自动注入当前登录用户的 Token 信息
+    public ResponseEntity<?> applyForSeller(
+            @AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody SellerApplyDTORequest request
     ) {
-        // 1. 安全获取 User ID (Cognito 'sub' 字段)
-        // 这样可以确保用户只能给自己申请，不能伪造他人 ID
-        String userId = jwt.getClaimAsString("sub");
-
-        if (userId == null) {
-            return ResponseEntity.status(401).body("Invalid Token: User ID not found.");
+        try {
+            String userId = jwt.getClaimAsString("sub");
+            sellerService.applyForSeller(userId, request);
+            return ResponseEntity.ok("Application submitted successfully.");
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(409).body(e.getMessage()); // 409: 业务冲突 (已申请)
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(e.getMessage()); // 400: 参数错误 (字段缺失)
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError().body("系统处理异常");
         }
-
-        // 2. 调用业务服务
-        sellerService.applyForSeller(userId, request);
-
-        return ResponseEntity.ok("Seller application submitted successfully.");
     }
 }

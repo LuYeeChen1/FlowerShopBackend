@@ -20,17 +20,17 @@ public class JdbcSellerProfileRepository implements SellerProfileRepository {
 
     @Override
     public void saveIndividual(String userId, SellerApplyDTORequest dto) {
+        // 确保 dto.getPhoneNumber() 在 Controller 层已拼接好前缀
         String sql = """
-            INSERT INTO individual_sellers (user_id, real_name, nric_number, phone_number, garden_address, status)
-            VALUES (?, ?, ?, ?, ?, 'PENDING_REVIEW')
-            ON DUPLICATE KEY UPDATE 
-                real_name = VALUES(real_name),
-                nric_number = VALUES(nric_number),
-                phone_number = VALUES(phone_number),
-                garden_address = VALUES(garden_address),
-                status = 'PENDING_REVIEW',
-                updated_at = CURRENT_TIMESTAMP
-        """;
+        INSERT INTO individual_sellers (user_id, real_name, nric_number, phone_number, garden_address, status)
+        VALUES (?, ?, ?, ?, ?, 'PENDING_REVIEW')
+        ON DUPLICATE KEY UPDATE 
+            real_name = VALUES(real_name),
+            nric_number = VALUES(nric_number),
+            phone_number = VALUES(phone_number),
+            garden_address = VALUES(garden_address),
+            status = 'PENDING_REVIEW'
+    """;
         jdbcTemplate.update(sql, userId, dto.getRealName(), dto.getNricNumber(), dto.getPhoneNumber(), dto.getAddress());
     }
 
@@ -83,21 +83,15 @@ public class JdbcSellerProfileRepository implements SellerProfileRepository {
         return dto;
     };
 
-    /**
-     * 示例：查询某个用户的申请信息 (为了回显或查看状态)
-     * 这时候就必须用到上面的 Mapper 了
-     */
-    public Optional<SellerApplyDTORequest> findApplicationByUserId(String userId) {
-        // 先试着查个人表
-        String indSql = "SELECT * FROM individual_sellers WHERE user_id = ?";
-        List<SellerApplyDTORequest> indResults = jdbcTemplate.query(indSql, individualRowMapper, userId);
-        if (!indResults.isEmpty()) return Optional.of(indResults.get(0));
-
-        // 再试着查企业表
-        String bizSql = "SELECT * FROM business_sellers WHERE user_id = ?";
-        List<SellerApplyDTORequest> bizResults = jdbcTemplate.query(bizSql, businessRowMapper, userId);
-        if (!bizResults.isEmpty()) return Optional.of(bizResults.get(0));
-
-        return Optional.empty();
+    @Override
+    public Optional<String> findStatusByUserId(String userId) {
+        // 使用 UNION 同时查询两张表的状态
+        String sql = """
+        SELECT status FROM individual_sellers WHERE user_id = ?
+        UNION
+        SELECT status FROM business_sellers WHERE user_id = ?
+    """;
+        return jdbcTemplate.query(sql, (rs, rowNum) -> rs.getString("status"), userId, userId)
+                .stream().findFirst();
     }
 }
