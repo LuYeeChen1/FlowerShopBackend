@@ -17,8 +17,8 @@ public class JdbcFlowerRepository implements FlowerRepository {
 
     private final JdbcTemplate jdbcTemplate;
 
-    // 🔥 请替换为您的 S3 Bucket 区域和名称，或者配置 CloudFront
-    // 格式: https://[bucket].s3.[region].amazonaws.com/
+    // 🔥 统一配置 S3 基础 URL
+    // 优先读取配置文件中的 aws.s3.base-url，如果没有则使用默认值
     @Value("${aws.s3.base-url:https://flower-shop-product.s3.us-east-1.amazonaws.com/}")
     private String s3BaseUrl;
 
@@ -26,29 +26,39 @@ public class JdbcFlowerRepository implements FlowerRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
-    // ... save 方法保持不变 ...
+    // 1. 保存鲜花 (卖家上架)
     @Override
     public void save(String sellerId, FlowerDTORequest dto) {
         String sql = """
             INSERT INTO flowers (name, description, price, stock, image_url, category, seller_id, created_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         """;
-        jdbcTemplate.update(sql, dto.getName(), dto.getDescription(), dto.getPrice(), dto.getStock(), dto.getImageUrl(), dto.getCategory(), sellerId);
+        // 注意：这里存入数据库的 image_url 依然是相对路径 (Key)，例如 "flowers/..."
+        // 这样设计是为了以后迁移 CDN 或 Bucket 时更灵活
+        jdbcTemplate.update(sql,
+                dto.getName(),
+                dto.getDescription(),
+                dto.getPrice(),
+                dto.getStock(),
+                dto.getImageUrl(),
+                dto.getCategory(),
+                sellerId
+        );
     }
 
-    // ... findAllPublic 方法保持不变 (但建议在 RowMapper 里拼接 s3BaseUrl) ...
+    // 2. 查询所有公开鲜花 (买家首页)
     @Override
     public List<Flower> findAllPublic() {
         String sql = "SELECT id, name, description, price, stock, image_url, category, seller_id FROM flowers";
         return jdbcTemplate.query(sql, flowerRowMapper);
     }
 
-    // 在 JdbcFlowerRepository 类中添加：
+    // 3. 查询特定卖家的库存 (卖家中心)
+    @Override
     public List<Flower> findAllBySellerId(String sellerId) {
-        // 🔥 注意：这里要拼接 S3 Base URL，否则前端图片不显示
-        String s3BaseUrl = "https://flower-shop-product.s3.us-east-1.amazonaws.com/";
         String sql = "SELECT id, name, description, price, stock, image_url, category, seller_id FROM flowers WHERE seller_id = ? ORDER BY created_at DESC";
 
+        // 这里直接复用 flowerRowMapper，或者手动写映射逻辑
         return jdbcTemplate.query(sql, (rs, rowNum) -> {
             Flower flower = new Flower();
             flower.setId(rs.getLong("id"));
@@ -56,15 +66,22 @@ public class JdbcFlowerRepository implements FlowerRepository {
             flower.setDescription(rs.getString("description"));
             flower.setPrice(rs.getBigDecimal("price"));
             flower.setStock(rs.getInt("stock"));
-            // 拼接完整链接
-            flower.setImageUrl(s3BaseUrl + rs.getString("image_url"));
+
+            // 🔥 关键：拼接完整 URL
+            String rawKey = rs.getString("image_url");
+            if (rawKey != null && !rawKey.startsWith("http")) {
+                flower.setImageUrl(s3BaseUrl + rawKey);
+            } else {
+                flower.setImageUrl(rawKey);
+            }
+
             flower.setCategory(rs.getString("category"));
             flower.setSellerId(rs.getString("seller_id"));
             return flower;
         }, sellerId);
     }
 
-    // ✅ 新增 2: 查询商品详情 + 卖家档案 (JOIN 查询)
+    // 4. 查询商品详情 + 卖家档案 (详情页)
     public Optional<FlowerDetailDTOResponse> findDetailById(Long flowerId) {
         String sql = """
             SELECT 
@@ -90,10 +107,16 @@ public class JdbcFlowerRepository implements FlowerRepository {
             dto.setDescription(rs.getString("description"));
             dto.setPrice(rs.getBigDecimal("price"));
             dto.setStock(rs.getInt("stock"));
-            // 拼接完整 URL
-            dto.setImageUrl(s3BaseUrl + rs.getString("image_url"));
-            dto.setCategory(rs.getString("category"));
 
+            // 🔥 关键：拼接完整 URL
+            String rawKey = rs.getString("image_url");
+            if (rawKey != null && !rawKey.startsWith("http")) {
+                dto.setImageUrl(s3BaseUrl + rawKey);
+            } else {
+                dto.setImageUrl(rawKey);
+            }
+
+            dto.setCategory(rs.getString("category"));
             dto.setSellerId(rs.getString("seller_id"));
             dto.setSellerName(rs.getString("seller_name"));
             dto.setSellerType(rs.getString("seller_type"));
@@ -105,7 +128,7 @@ public class JdbcFlowerRepository implements FlowerRepository {
         }, flowerId).stream().findFirst();
     }
 
-    // 基础 Mapper (用于列表)
+    // --- 通用 RowMapper (减少重复代码) ---
     private final RowMapper<Flower> flowerRowMapper = (rs, rowNum) -> {
         Flower flower = new Flower();
         flower.setId(rs.getLong("id"));
@@ -113,8 +136,15 @@ public class JdbcFlowerRepository implements FlowerRepository {
         flower.setDescription(rs.getString("description"));
         flower.setPrice(rs.getBigDecimal("price"));
         flower.setStock(rs.getInt("stock"));
-        // 拼接完整 URL
-        flower.setImageUrl(s3BaseUrl + rs.getString("image_url"));
+
+        // 🔥 自动拼接 URL
+        String rawKey = rs.getString("image_url");
+        if (rawKey != null && !rawKey.startsWith("http")) {
+            flower.setImageUrl(s3BaseUrl + rawKey);
+        } else {
+            flower.setImageUrl(rawKey);
+        }
+
         flower.setCategory(rs.getString("category"));
         flower.setSellerId(rs.getString("seller_id"));
         return flower;
