@@ -26,6 +26,7 @@ public class OrderService {
     private final CartRepository cartRepository;
     private final FlowerRepository flowerRepository;
 
+    // 移除 EmailAdapter 依赖
     public OrderService(OrderRepository orderRepository,
                         CartService cartService,
                         CartRepository cartRepository,
@@ -38,11 +39,13 @@ public class OrderService {
 
     @Transactional
     public Long checkout(String userId, String userEmail, CreateOrderRequestDTO request) {
+        // 1. 获取购物车
         List<CartItemDTOResponse> cartItems = cartService.getMyCart(userId);
         if (cartItems.isEmpty()) {
             throw new RuntimeException("Cart is empty");
         }
 
+        // 2. 扣减库存 & 计算总价
         BigDecimal total = BigDecimal.ZERO;
         for (CartItemDTOResponse item : cartItems) {
             int rowsAffected = flowerRepository.reduceStock(item.flowerId(), item.quantity());
@@ -53,20 +56,22 @@ public class OrderService {
             total = total.add(itemSubtotal);
         }
 
+        // 3. 创建订单
         Order order = new Order();
         order.setUserId(userId);
         order.setTotalPrice(total);
 
-        // ✅ [核心变更] 初始状态设为 Enum
+        // 初始状态: PAID
         order.setStatus(OrderStatus.PAID);
 
-        order.setReceiverEmail(userEmail);
+        order.setReceiverEmail(userEmail); // 依然保存 Email 到数据库，但不发邮件
         order.setReceiverName(request.getReceiverName());
         order.setReceiverPhone(request.getReceiverPhone());
         order.setShippingAddress(request.getShippingAddress());
 
         Long orderId = orderRepository.saveOrder(order);
 
+        // 4. 保存订单详情
         List<OrderItem> orderItems = new ArrayList<>();
         for (CartItemDTOResponse item : cartItems) {
             OrderItem orderItem = new OrderItem();
@@ -78,7 +83,11 @@ public class OrderService {
             orderItems.add(orderItem);
         }
         orderRepository.saveOrderItems(orderItems);
+
+        // 5. 清空购物车
         cartRepository.deleteAllByUserId(userId);
+
+        // 移除邮件发送逻辑
 
         return orderId;
     }
@@ -97,29 +106,22 @@ public class OrderService {
         return orders;
     }
 
-    // --- 状态流转逻辑 ---
+    // --- 状态机流转 (保留) ---
 
     @Transactional
-    // ✅ [核心变更] 参数接收 OrderStatus Enum
     public void updateOrderStatus(Long orderId, OrderStatus newStatus) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found: " + orderId));
 
-        // 校验状态流转 (Enum 比较)
         validateStateTransition(order.getStatus(), newStatus);
-
-        // 更新状态
         orderRepository.updateStatus(orderId, newStatus);
     }
 
     private void validateStateTransition(OrderStatus current, OrderStatus next) {
-        // 允许: PAID -> SHIPPED
         if (current == OrderStatus.PAID && next == OrderStatus.SHIPPED) return;
-
-        // 允许: SHIPPED -> DELIVERED
         if (current == OrderStatus.SHIPPED && next == OrderStatus.DELIVERED) return;
-
-        // 幂等性 (重复点没关系)
+        if (current == OrderStatus.PAID && next == OrderStatus.CANCELLATION_REQUESTED) return;
+        if (current == OrderStatus.CANCELLATION_REQUESTED && (next == OrderStatus.CANCELLED || next == OrderStatus.PAID)) return;
         if (current == next) return;
 
         throw new RuntimeException("Invalid status transition from " + current + " to " + next);
@@ -130,19 +132,14 @@ public class OrderService {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
-        // 安全检查: 只能取消自己的订单
         if (!order.getUserId().equals(userId)) {
             throw new RuntimeException("Unauthorized access to order");
         }
 
-        // 状态机检查: 只有 PAID 状态可以申请取消
         if (order.getStatus() != OrderStatus.PAID) {
             throw new RuntimeException("Cannot cancel order in state: " + order.getStatus());
         }
 
-        // 更新状态为 "申请中"
         orderRepository.updateStatus(orderId, OrderStatus.CANCELLATION_REQUESTED);
-
-        // 可选: 发送通知给卖家 (TODO: NotificationService)
     }
 }
