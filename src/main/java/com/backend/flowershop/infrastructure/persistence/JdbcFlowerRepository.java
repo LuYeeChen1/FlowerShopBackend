@@ -23,28 +23,39 @@ public class JdbcFlowerRepository implements FlowerRepository {
         this.jdbcTemplate = jdbcTemplate;
     }
 
+    // ✅ 修正：接收 Flower 实体
     @Override
     public void save(Flower flower) {
         if (flower.getId() == null) {
+            // Insert
             String sql = """
                 INSERT INTO flowers (name, description, price, stock, image_url, category, seller_id, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
             """;
             jdbcTemplate.update(sql,
-                    flower.getName(), flower.getDescription(), flower.getPrice(),
-                    flower.getStock(), //  写入库存
-                    flower.getImageUrl(), flower.getCategory(), flower.getSellerId()
+                    flower.getName(),
+                    flower.getDescription(),
+                    flower.getPrice(),
+                    flower.getStock(), // 存库存
+                    flower.getImageUrl(),
+                    flower.getCategory(),
+                    flower.getSellerId()
             );
         } else {
+            // Update
             String sql = """
                 UPDATE flowers 
                 SET name=?, description=?, price=?, stock=?, image_url=?, category=? 
                 WHERE id=?
             """;
             jdbcTemplate.update(sql,
-                    flower.getName(), flower.getDescription(), flower.getPrice(),
-                    flower.getStock(), //  更新库存
-                    flower.getImageUrl(), flower.getCategory(), flower.getId()
+                    flower.getName(),
+                    flower.getDescription(),
+                    flower.getPrice(),
+                    flower.getStock(), // 更新库存
+                    flower.getImageUrl(),
+                    flower.getCategory(),
+                    flower.getId()
             );
         }
     }
@@ -61,10 +72,24 @@ public class JdbcFlowerRepository implements FlowerRepository {
         return jdbcTemplate.query(sql, flowerRowMapper, sellerId);
     }
 
+    // ✅ 修正：实现 findById 用于 Service 层查询实体
+    @Override
+    public Flower findById(Long id) {
+        String sql = "SELECT id, name, description, price, stock, image_url, category, seller_id FROM flowers WHERE id = ?";
+        return jdbcTemplate.query(sql, flowerRowMapper, id)
+                .stream().findFirst().orElse(null);
+    }
+
     @Override
     public int reduceStock(Long flowerId, int quantity) {
         String sql = "UPDATE flowers SET stock = stock - ? WHERE id = ? AND stock >= ?";
         return jdbcTemplate.update(sql, quantity, flowerId, quantity);
+    }
+
+    @Override
+    public void delete(Long id) {
+        String sql = "DELETE FROM flowers WHERE id = ?";
+        jdbcTemplate.update(sql, id);
     }
 
     @Override
@@ -88,7 +113,7 @@ public class JdbcFlowerRepository implements FlowerRepository {
             dto.setName(rs.getString("name"));
             dto.setDescription(rs.getString("description"));
             dto.setPrice(rs.getBigDecimal("price"));
-            dto.setStock(rs.getInt("stock")); // 详情页也要读库存
+            dto.setStock(rs.getInt("stock"));
 
             String rawKey = rs.getString("image_url");
             if (rawKey != null && !rawKey.startsWith("http")) dto.setImageUrl(s3BaseUrl + rawKey);
@@ -110,7 +135,7 @@ public class JdbcFlowerRepository implements FlowerRepository {
         flower.setName(rs.getString("name"));
         flower.setDescription(rs.getString("description"));
         flower.setPrice(rs.getBigDecimal("price"));
-        flower.setStock(rs.getInt("stock")); // 核心：从数据库读库存
+        flower.setStock(rs.getInt("stock"));
 
         String rawKey = rs.getString("image_url");
         if (rawKey != null && !rawKey.startsWith("http")) flower.setImageUrl(s3BaseUrl + rawKey);

@@ -1,8 +1,8 @@
 package com.backend.flowershop.infrastructure.web;
 
 import com.backend.flowershop.application.dto.request.FlowerDTORequest;
-import com.backend.flowershop.application.dto.response.FlowerDTOResponse;       // 列表
-import com.backend.flowershop.application.dto.response.FlowerDetailDTOResponse; // 详情
+import com.backend.flowershop.application.dto.response.FlowerDTOResponse;
+import com.backend.flowershop.application.dto.response.FlowerDetailDTOResponse;
 import com.backend.flowershop.application.service.SellerFlowerService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -46,8 +46,29 @@ public class SellerFlowerController {
         return ResponseEntity.ok("Flower listed successfully.");
     }
 
-    // ✅ 接口 A: 获取库存列表 (Layer 1)
-    // 返回轻量级的 FlowerDTOResponse Record
+    // ✅ 新增：更新商品
+    @PutMapping("/{id}")
+    public ResponseEntity<?> updateFlower(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long id,
+            @RequestBody FlowerDTORequest request
+    ) {
+        String sellerId = jwt.getSubject();
+        sellerFlowerService.updateFlower(sellerId, id, request);
+        return ResponseEntity.ok("Flower updated successfully.");
+    }
+
+    // ✅ 新增：删除商品
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteFlower(
+            @AuthenticationPrincipal Jwt jwt,
+            @PathVariable Long id
+    ) {
+        String sellerId = jwt.getSubject();
+        sellerFlowerService.deleteFlower(sellerId, id);
+        return ResponseEntity.ok("Flower deleted successfully.");
+    }
+
     @GetMapping
     public ResponseEntity<List<FlowerDTOResponse>> getMyInventory(@AuthenticationPrincipal Jwt jwt) {
         String sellerId = jwt.getSubject();
@@ -55,8 +76,6 @@ public class SellerFlowerController {
         return ResponseEntity.ok(myFlowers);
     }
 
-    // ✅ 接口 B: 获取单个详情 (Layer 2)
-    // 返回重量级的 FlowerDetailDTOResponse
     @GetMapping("/{id}")
     public ResponseEntity<FlowerDetailDTOResponse> getFlowerDetail(@PathVariable Long id) {
         return sellerFlowerService.getFlowerDetail(id)

@@ -23,11 +23,29 @@ public class OrderController {
     }
 
     @PostMapping("/checkout")
-    public ResponseEntity<?> checkout(@AuthenticationPrincipal Jwt jwt, @RequestBody CreateOrderRequestDTO request) {
-        if (jwt == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+    public ResponseEntity<?> checkout(
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestBody CreateOrderRequestDTO request) {
+
+        if (jwt == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
         try {
-            Long orderId = orderService.checkout(jwt.getSubject(), request);
-            return ResponseEntity.ok(Map.of("message", "Order placed successfully", "orderId", orderId));
+            String userId = jwt.getSubject();
+            // ✅ 获取登录账号的 Email (Cognito Token 中通常包含 "email" 字段)
+            String userEmail = jwt.getClaimAsString("email");
+
+            // 如果 Token 里没 email，就 fallback 到 userId (或者抛错)
+            if (userEmail == null) userEmail = userId;
+
+            // 将 email 传给 Service
+            Long orderId = orderService.checkout(userId, userEmail, request);
+
+            return ResponseEntity.ok(Map.of(
+                    "message", "Order placed successfully",
+                    "orderId", orderId
+            ));
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
         }

@@ -6,17 +6,19 @@ import java.util.List;
 
 public class Order {
     private Long id;
-    private String userId;           // 下单用户 ID (Cognito sub)
-    private BigDecimal totalPrice;   // 订单总价
-    private String status;           // 状态: PENDING, PAID, SHIPPED, COMPLETED, CANCELLED
-    private String shippingAddress;  // 收货地址
+    private String userId;
+    private BigDecimal totalPrice;
+    private String status;
     private LocalDateTime createdAt;
-    private LocalDateTime updatedAt;
 
-    // 关联的订单项列表 (非数据库字段，用于业务逻辑)
+    private String receiverName;
+    private String receiverPhone;
+    private String receiverEmail; // 将存储 Token 中的 email
+    private String shippingAddress;
+
     private List<OrderItem> items;
 
-    // Getters and Setters
+    // Getters & Setters
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
@@ -29,15 +31,21 @@ public class Order {
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
 
-    public String getShippingAddress() { return shippingAddress; }
-    public void setShippingAddress(String shippingAddress) { this.shippingAddress = shippingAddress; }
-
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
-    public LocalDateTime getUpdatedAt() { return updatedAt; }
-    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public String getShippingAddress() { return shippingAddress; }
+    public void setShippingAddress(String shippingAddress) { this.shippingAddress = shippingAddress; }
 
     public List<OrderItem> getItems() { return items; }
     public void setItems(List<OrderItem> items) { this.items = items; }
+
+    public String getReceiverName() { return receiverName; }
+    public void setReceiverName(String receiverName) { this.receiverName = receiverName; }
+
+    public String getReceiverPhone() { return receiverPhone; }
+    public void setReceiverPhone(String receiverPhone) { this.receiverPhone = receiverPhone; }
+
+    public String getReceiverEmail() { return receiverEmail; }
+    public void setReceiverEmail(String receiverEmail) { this.receiverEmail = receiverEmail; }
 }

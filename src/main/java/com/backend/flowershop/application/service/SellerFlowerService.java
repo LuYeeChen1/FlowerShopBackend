@@ -35,19 +35,60 @@ public class SellerFlowerService {
         return storagePort.generatePresignedUrl(key, contentType);
     }
 
+    // Create: DTO -> Entity 转换在这里进行
     @Transactional
     public void createFlower(String sellerId, FlowerDTORequest request) {
-        // 核心修复：DTO 转 Entity
         Flower flower = new Flower();
         flower.setName(request.getName());
         flower.setDescription(request.getDescription());
         flower.setPrice(request.getPrice());
-        flower.setStock(request.getStock()); // 存库存
+        flower.setStock(request.getStock());
         flower.setImageUrl(request.getImageUrl());
         flower.setCategory(request.getCategory());
         flower.setSellerId(sellerId);
 
+        // Repository 只接收纯净的 Entity
         flowerRepository.save(flower);
+    }
+
+    // Update: 先查后改
+    @Transactional
+    public void updateFlower(String sellerId, Long flowerId, FlowerDTORequest request) {
+        Flower flower = flowerRepository.findById(flowerId);
+        if (flower == null) {
+            throw new RuntimeException("Flower not found");
+        }
+
+        // 权限检查
+        if (!flower.getSellerId().equals(sellerId)) {
+            throw new RuntimeException("Unauthorized: You do not own this flower.");
+        }
+
+        // 更新字段
+        flower.setName(request.getName());
+        flower.setDescription(request.getDescription());
+        flower.setPrice(request.getPrice());
+        flower.setStock(request.getStock());
+        flower.setCategory(request.getCategory());
+
+        if (request.getImageUrl() != null && !request.getImageUrl().isEmpty()) {
+            flower.setImageUrl(request.getImageUrl());
+        }
+
+        // 调用 save (JDBC Repository 内部会根据 ID 存在与否执行 UPDATE)
+        flowerRepository.save(flower);
+    }
+
+    @Transactional
+    public void deleteFlower(String sellerId, Long flowerId) {
+        Flower flower = flowerRepository.findById(flowerId);
+        if (flower == null) {
+            throw new RuntimeException("Flower not found");
+        }
+        if (!flower.getSellerId().equals(sellerId)) {
+            throw new RuntimeException("Unauthorized");
+        }
+        flowerRepository.delete(flowerId);
     }
 
     public List<FlowerDTOResponse> getMyInventory(String sellerId) {
