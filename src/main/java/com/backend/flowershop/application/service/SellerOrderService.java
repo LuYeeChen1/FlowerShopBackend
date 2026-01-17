@@ -40,54 +40,36 @@ public class SellerOrderService {
         }
     }
 
-    /**
-     * [卖家功能] 审核买家的取消申请
-     */
     @Transactional
-    public void auditCancellation(Long orderId, String sellerId, boolean approved) {
-        if (approved) {
-            // 1. 同意 -> 更新状态
-            orderRepository.updateStatus(orderId, OrderStatus.CANCELLED);
-            orderRepository.updateItemsStatusBySeller(orderId, sellerId, OrderStatus.CANCELLED);
-
-            // 2. 查找该卖家在此订单中的所有商品
-            List<OrderItem> items = orderRepository.findOrderItemsByOrderIdAndSellerId(orderId, sellerId);
-
-            BigDecimal refundAmount = BigDecimal.ZERO;
-
-            for (OrderItem item : items) {
-                // 3. 恢复库存
-                flowerRepository.restoreStock(item.getFlowerId(), item.getQuantity());
-
-                // 4. 计算需扣减的收入 (Price * Qty)
-                BigDecimal itemTotal = item.getPriceAtPurchase().multiply(BigDecimal.valueOf(item.getQuantity()));
-                refundAmount = refundAmount.add(itemTotal);
-            }
-
-            // 5. ✅ [新增] 扣减商家收入 (传入负数)
-            if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
-                orderRepository.updateSellerRevenue(sellerId, refundAmount.negate());
-            }
-
-        } else {
-            // 拒绝 -> 恢复为 PAID
-            orderRepository.updateStatus(orderId, OrderStatus.PAID);
+    public void deliverOrder(Long orderId, String sellerId) {
+        orderRepository.updateItemsStatusBySeller(orderId, sellerId, OrderStatus.DELIVERED);
+        List<OrderItem> allItems = orderRepository.findOrderItemsByOrderId(orderId);
+        boolean allDelivered = allItems.stream().allMatch(item -> item.getStatus() == OrderStatus.DELIVERED);
+        if (allDelivered) {
+            orderRepository.updateStatus(orderId, OrderStatus.DELIVERED);
         }
     }
 
     @Transactional
-    public void deliverOrder(Long orderId, String sellerId) {
-        // 1. 更新当前卖家的商品状态
-        orderRepository.updateItemsStatusBySeller(orderId, sellerId, OrderStatus.DELIVERED);
+    public void auditCancellation(Long orderId, String sellerId, boolean approved) {
+        if (approved) {
+            orderRepository.updateStatus(orderId, OrderStatus.CANCELLED);
+            orderRepository.updateItemsStatusBySeller(orderId, sellerId, OrderStatus.CANCELLED);
 
-        // 2. 检查全单是否完成 (复用现有查询方法，避免修改 Repository 接口)
-        List<OrderItem> allItems = orderRepository.findOrderItemsByOrderId(orderId);
+            List<OrderItem> items = orderRepository.findOrderItemsByOrderIdAndSellerId(orderId, sellerId);
+            BigDecimal refundAmount = BigDecimal.ZERO;
 
-        boolean allDelivered = allItems.stream()
-                .allMatch(item -> item.getStatus() == OrderStatus.DELIVERED);
+            for (OrderItem item : items) {
+                flowerRepository.restoreStock(item.getFlowerId(), item.getQuantity());
+                BigDecimal itemTotal = item.getPriceAtPurchase().multiply(BigDecimal.valueOf(item.getQuantity()));
+                refundAmount = refundAmount.add(itemTotal);
+            }
 
-        if (allDelivered) {
-            orderRepository.updateStatus(orderId, OrderStatus.DELIVERED);
+            if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
+                orderRepository.updateSellerRevenue(sellerId, refundAmount.negate());
+            }
+        } else {
+            orderRepository.updateStatus(orderId, OrderStatus.PAID);
         }
     }
 
@@ -101,14 +83,25 @@ public class SellerOrderService {
 
         for (OrderItem item : items) {
             flowerRepository.restoreStock(item.getFlowerId(), item.getQuantity());
-
             BigDecimal itemTotal = item.getPriceAtPurchase().multiply(BigDecimal.valueOf(item.getQuantity()));
             refundAmount = refundAmount.add(itemTotal);
         }
 
-        // ✅ [新增] 扣减商家收入 (传入负数)
         if (refundAmount.compareTo(BigDecimal.ZERO) > 0) {
             orderRepository.updateSellerRevenue(sellerId, refundAmount.negate());
         }
+    }
+
+    // [修复] 使用 .status() 访问 record 属性
+    @Transactional
+    public void deleteOrderFromHistory(Long orderId, String sellerId) {
+        SellerOrderDTOResponse order = getOrderDetails(orderId, sellerId);
+        String status = order.status(); // 修正：getStatus() -> status()
+
+        if (!"DELIVERED".equals(status) && !"CANCELLED".equals(status)) {
+            throw new RuntimeException("Only completed or cancelled orders can be removed from history.");
+        }
+
+        orderRepository.hideOrderItemsForSeller(orderId, sellerId);
     }
 }

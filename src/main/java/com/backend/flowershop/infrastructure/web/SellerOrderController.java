@@ -32,7 +32,6 @@ public class SellerOrderController {
         return ResponseEntity.ok(sellerOrderService.getOrderDetails(orderId, jwt.getSubject()));
     }
 
-    // 发货
     @PatchMapping("/{orderId}/ship")
     public ResponseEntity<?> shipOrder(
             @PathVariable Long orderId,
@@ -41,7 +40,6 @@ public class SellerOrderController {
         return ResponseEntity.ok().build();
     }
 
-    // [新增] 标记送达
     @PatchMapping("/{orderId}/deliver")
     public ResponseEntity<?> deliverOrder(
             @PathVariable Long orderId,
@@ -50,7 +48,6 @@ public class SellerOrderController {
         return ResponseEntity.ok().build();
     }
 
-    // 审核取消
     @PostMapping("/{orderId}/audit-cancel")
     public ResponseEntity<?> auditCancel(
             @PathVariable Long orderId,
@@ -60,10 +57,16 @@ public class SellerOrderController {
         return ResponseEntity.ok(Map.of("message", "Audit processed"));
     }
 
-    // 强制取消
     @PostMapping("/{orderId}/force-cancel")
     public ResponseEntity<?> forceCancel(@PathVariable Long orderId, @AuthenticationPrincipal Jwt jwt) {
         sellerOrderService.forceCancel(orderId, jwt.getSubject());
         return ResponseEntity.ok(Map.of("message", "Order force cancelled"));
+    }
+
+    // [新增] 卖家删除历史记录
+    @DeleteMapping("/{orderId}")
+    public ResponseEntity<?> deleteOrder(@PathVariable Long orderId, @AuthenticationPrincipal Jwt jwt) {
+        sellerOrderService.deleteOrderFromHistory(orderId, jwt.getSubject());
+        return ResponseEntity.ok(Map.of("message", "Order removed from history"));
     }
 }

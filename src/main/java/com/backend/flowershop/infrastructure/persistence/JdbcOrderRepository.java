@@ -30,8 +30,8 @@ public class JdbcOrderRepository implements OrderRepository {
     public Long saveOrder(Order order) {
         String sql = """
             INSERT INTO orders 
-            (user_id, total_price, status, shipping_address, receiver_name, receiver_phone, receiver_email, created_at) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            (user_id, total_price, status, shipping_address, receiver_name, receiver_phone, receiver_email, created_at, is_hidden_for_buyer) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, FALSE)
         """;
         jdbcTemplate.update(sql,
                 order.getUserId(),
@@ -47,8 +47,7 @@ public class JdbcOrderRepository implements OrderRepository {
 
     @Override
     public void saveOrderItems(List<OrderItem> items) {
-        String sql = "INSERT INTO order_items (order_id, flower_id, flower_name, price_at_purchase, quantity, status) VALUES (?, ?, ?, ?, ?, ?)";
-
+        String sql = "INSERT INTO order_items (order_id, flower_id, flower_name, price_at_purchase, quantity, status, is_hidden_for_seller) VALUES (?, ?, ?, ?, ?, ?, FALSE)";
         for (OrderItem item : items) {
             String status = OrderStatus.PAID.name();
             jdbcTemplate.update(sql, item.getOrderId(), item.getFlowerId(), item.getFlowerName(), item.getPriceAtPurchase(), item.getQuantity(), status);
@@ -57,8 +56,35 @@ public class JdbcOrderRepository implements OrderRepository {
 
     @Override
     public List<Order> findByUserId(String userId) {
-        String sql = "SELECT * FROM orders WHERE user_id = ? ORDER BY created_at DESC";
+        //  [过滤] 只查没有被买家隐藏的订单
+        String sql = "SELECT * FROM orders WHERE user_id = ? AND is_hidden_for_buyer = FALSE ORDER BY created_at DESC";
         return jdbcTemplate.query(sql, orderRowMapper, userId);
+    }
+
+    //  [实现] 买家隐藏单个订单
+    @Override
+    public void hideOrderForBuyer(Long orderId) {
+        String sql = "UPDATE orders SET is_hidden_for_buyer = TRUE WHERE id = ?";
+        jdbcTemplate.update(sql, orderId);
+    }
+
+    //  [实现] 买家清空历史 (只清空 DELIVERED 或 CANCELLED)
+    @Override
+    public void hideAllCompletedOrdersForBuyer(String userId) {
+        String sql = "UPDATE orders SET is_hidden_for_buyer = TRUE WHERE user_id = ? AND status IN ('DELIVERED', 'CANCELLED')";
+        jdbcTemplate.update(sql, userId);
+    }
+
+    //  [实现] 卖家隐藏订单 (实际是隐藏 order_items)
+    @Override
+    public void hideOrderItemsForSeller(Long orderId, String sellerId) {
+        String sql = """
+            UPDATE order_items oi
+            JOIN flowers f ON oi.flower_id = f.id
+            SET oi.is_hidden_for_seller = TRUE
+            WHERE oi.order_id = ? AND f.seller_id = ?
+        """;
+        jdbcTemplate.update(sql, orderId, sellerId);
     }
 
     @Override
@@ -136,10 +162,8 @@ public class JdbcOrderRepository implements OrderRepository {
         return jdbcTemplate.query(sql, orderItemRowMapper, orderId);
     }
 
-    // ✅ [新增] 核心实现：更新商家钱包
     @Override
     public void updateSellerRevenue(String sellerId, BigDecimal amount) {
-        // 如果钱包记录不存在则插入，存在则更新余额
         String sql = """
             INSERT INTO seller_wallets (seller_id, total_revenue) 
             VALUES (?, ?) 
@@ -194,12 +218,13 @@ public class JdbcOrderRepository implements OrderRepository {
 
     @Override
     public List<SellerOrderDTOResponse> findOrdersBySellerId(String sellerId) {
+        //  [过滤] 只查询没有被该 Seller 隐藏的 Items
         String sqlIds = """
             SELECT DISTINCT o.id, o.created_at
             FROM orders o
             JOIN order_items oi ON o.id = oi.order_id
             JOIN flowers f ON oi.flower_id = f.id
-            WHERE f.seller_id = ?
+            WHERE f.seller_id = ? AND oi.is_hidden_for_seller = FALSE
             ORDER BY o.created_at DESC
         """;
         List<Long> orderIds = jdbcTemplate.query(sqlIds, (rs, rowNum) -> rs.getLong("id"), sellerId);
@@ -208,11 +233,13 @@ public class JdbcOrderRepository implements OrderRepository {
             String sqlOrder = "SELECT * FROM orders WHERE id = ?";
             return jdbcTemplate.query(sqlOrder, (rs, rowNum) -> {
                 Long oId = rs.getLong("id");
+
+                // 同样只加载未隐藏的 Item 详情
                 String sqlItems = """
                     SELECT oi.flower_name, oi.quantity, oi.price_at_purchase, f.image_url
                     FROM order_items oi
                     JOIN flowers f ON oi.flower_id = f.id
-                    WHERE oi.order_id = ? AND f.seller_id = ?
+                    WHERE oi.order_id = ? AND f.seller_id = ? AND oi.is_hidden_for_seller = FALSE
                 """;
 
                 List<SellerOrderDTOResponse.SellerOrderItemDTO> items = jdbcTemplate.query(sqlItems, (rs2, rn2) -> {

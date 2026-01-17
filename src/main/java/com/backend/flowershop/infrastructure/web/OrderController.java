@@ -83,4 +83,18 @@ public class OrderController {
         orderService.requestCancel(orderId, jwt.getSubject());
         return ResponseEntity.ok(Map.of("message", "Cancellation requested successfully"));
     }
+
+    // ✅ [新增] 删除单个订单历史
+    @DeleteMapping("/{orderId}")
+    public ResponseEntity<?> deleteOrder(@PathVariable Long orderId, @AuthenticationPrincipal Jwt jwt) {
+        orderService.deleteOrder(orderId, jwt.getSubject());
+        return ResponseEntity.ok(Map.of("message", "Order removed from history"));
+    }
+
+    // ✅ [新增] 清空历史
+    @DeleteMapping("/history")
+    public ResponseEntity<?> clearHistory(@AuthenticationPrincipal Jwt jwt) {
+        orderService.clearOrderHistory(jwt.getSubject());
+        return ResponseEntity.ok(Map.of("message", "History cleared"));
+    }
 }
