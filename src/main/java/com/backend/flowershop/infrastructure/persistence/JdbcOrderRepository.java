@@ -10,6 +10,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 
@@ -46,11 +47,9 @@ public class JdbcOrderRepository implements OrderRepository {
 
     @Override
     public void saveOrderItems(List<OrderItem> items) {
-        // ✅ 确保这里包含 status 字段的插入
         String sql = "INSERT INTO order_items (order_id, flower_id, flower_name, price_at_purchase, quantity, status) VALUES (?, ?, ?, ?, ?, ?)";
 
         for (OrderItem item : items) {
-            // 默认子项状态跟随订单初始状态 (PAID)
             String status = OrderStatus.PAID.name();
             jdbcTemplate.update(sql, item.getOrderId(), item.getFlowerId(), item.getFlowerName(), item.getPriceAtPurchase(), item.getQuantity(), status);
         }
@@ -137,9 +136,20 @@ public class JdbcOrderRepository implements OrderRepository {
         return jdbcTemplate.query(sql, orderItemRowMapper, orderId);
     }
 
+    // ✅ [新增] 核心实现：更新商家钱包
+    @Override
+    public void updateSellerRevenue(String sellerId, BigDecimal amount) {
+        // 如果钱包记录不存在则插入，存在则更新余额
+        String sql = """
+            INSERT INTO seller_wallets (seller_id, total_revenue) 
+            VALUES (?, ?) 
+            ON DUPLICATE KEY UPDATE total_revenue = total_revenue + ?
+        """;
+        jdbcTemplate.update(sql, sellerId, amount, amount);
+    }
+
     @Override
     public Optional<SellerOrderDTOResponse> findOrderByIdAndSellerId(Long orderId, String sellerId) {
-        // 1. 校验该订单是否包含该卖家的商品
         String sqlOrder = """
             SELECT DISTINCT o.id, o.created_at, o.receiver_name, o.receiver_phone, o.receiver_email, o.shipping_address, o.total_price, o.status
             FROM orders o
@@ -150,8 +160,6 @@ public class JdbcOrderRepository implements OrderRepository {
 
         return jdbcTemplate.query(sqlOrder, (rs, rowNum) -> {
             Long oId = rs.getLong("id");
-
-            // 2. 查询该订单下属于该卖家的具体商品
             String sqlItems = """
                 SELECT oi.flower_name, oi.quantity, oi.price_at_purchase, f.image_url
                 FROM order_items oi
@@ -200,7 +208,6 @@ public class JdbcOrderRepository implements OrderRepository {
             String sqlOrder = "SELECT * FROM orders WHERE id = ?";
             return jdbcTemplate.query(sqlOrder, (rs, rowNum) -> {
                 Long oId = rs.getLong("id");
-
                 String sqlItems = """
                     SELECT oi.flower_name, oi.quantity, oi.price_at_purchase, f.image_url
                     FROM order_items oi
@@ -262,14 +269,10 @@ public class JdbcOrderRepository implements OrderRepository {
         item.setFlowerName(rs.getString("flower_name"));
         item.setPriceAtPurchase(rs.getBigDecimal("price_at_purchase"));
         item.setQuantity(rs.getInt("quantity"));
-
-        // 现在 setStatus 方法存在了，这里不会报错了
         try {
             String statusStr = rs.getString("status");
             if (statusStr != null) item.setStatus(OrderStatus.valueOf(statusStr));
-        } catch (Exception e) {
-            // 忽略转换错误，保持默认
-        }
+        } catch (Exception e) { }
 
         String rawKey = rs.getString("image_url");
         if (rawKey != null) {
