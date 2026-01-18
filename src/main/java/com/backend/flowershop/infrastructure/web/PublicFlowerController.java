@@ -1,12 +1,14 @@
 package com.backend.flowershop.infrastructure.web;
 
-import com.backend.flowershop.application.dto.response.FlowerDTOResponse; // Updated Import
 import com.backend.flowershop.application.dto.response.FlowerDetailDTOResponse;
 import com.backend.flowershop.application.service.FlowerService;
+import com.backend.flowershop.domain.model.Flower;
 import com.backend.flowershop.infrastructure.persistence.JdbcFlowerRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/public/flowers")
@@ -14,20 +16,30 @@ import java.util.List;
 public class PublicFlowerController {
 
     private final FlowerService flowerService;
-    private final JdbcFlowerRepository flowerRepository; // 注入 Repo
+    private final JdbcFlowerRepository flowerRepository;
 
     public PublicFlowerController(FlowerService flowerService, JdbcFlowerRepository flowerRepository) {
         this.flowerService = flowerService;
         this.flowerRepository = flowerRepository;
     }
 
+    // ✅ [更新] 支持分页、分类、搜索
     @GetMapping
-    public List<FlowerDTOResponse> getAllFlowers() {
-        // 确保 Service 里的 DTO 转换逻辑也加上了 S3 Base URL 前缀
-        return flowerService.getPublicFlowerCatalog();
+    public ResponseEntity<Map<String, Object>> getCatalog(
+            @RequestParam(required = false, defaultValue = "ALL") String category,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int offset,
+            @RequestParam(defaultValue = "6") int limit) {
+
+        List<Flower> flowers = flowerService.getPublicFlowers(category, search, offset, limit);
+        int total = flowerService.countPublicFlowers(category, search);
+
+        return ResponseEntity.ok(Map.of(
+                "list", flowers,
+                "total", total
+        ));
     }
 
-    //获取详情
     @GetMapping("/{id}")
     public ResponseEntity<FlowerDetailDTOResponse> getFlowerDetail(@PathVariable Long id) {
         return flowerRepository.findDetailById(id)

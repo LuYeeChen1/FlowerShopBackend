@@ -8,6 +8,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Repository;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -72,6 +73,48 @@ public class JdbcFlowerRepository implements FlowerRepository {
     public void delete(Long id) {
         String sql = "DELETE FROM flowers WHERE id = ?";
         jdbcTemplate.update(sql, id);
+    }
+
+    @Override
+    public List<Flower> findAllActive(String category, String search, int limit, int offset) {
+        StringBuilder sql = new StringBuilder("SELECT * FROM flowers WHERE stock > 0");
+        List<Object> params = new ArrayList<>();
+
+        if (category != null && !category.isEmpty() && !"ALL".equalsIgnoreCase(category)) {
+            sql.append(" AND category = ?");
+            params.add(category);
+        }
+
+        if (search != null && !search.isEmpty()) {
+            sql.append(" AND (name LIKE ? OR description LIKE ?)");
+            params.add("%" + search + "%");
+            params.add("%" + search + "%");
+        }
+
+        sql.append(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
+        params.add(limit);
+        params.add(offset);
+
+        return jdbcTemplate.query(sql.toString(), flowerRowMapper, params.toArray());
+    }
+
+    @Override
+    public int countActive(String category, String search) {
+        StringBuilder sql = new StringBuilder("SELECT COUNT(*) FROM flowers WHERE stock > 0");
+        List<Object> params = new ArrayList<>();
+
+        if (category != null && !category.isEmpty() && !"ALL".equalsIgnoreCase(category)) {
+            sql.append(" AND category = ?");
+            params.add(category);
+        }
+
+        if (search != null && !search.isEmpty()) {
+            sql.append(" AND (name LIKE ? OR description LIKE ?)");
+            params.add("%" + search + "%");
+            params.add("%" + search + "%");
+        }
+
+        return jdbcTemplate.queryForObject(sql.toString(), Integer.class, params.toArray());
     }
 
     @Override

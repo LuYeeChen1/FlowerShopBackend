@@ -89,15 +89,11 @@ public class OrderService {
         return orders;
     }
 
-    // ✅ [新增] 补充状态更新方法
     @Transactional
     public void updateOrderStatus(Long orderId, OrderStatus newStatus) {
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
-        // 简单校验状态流转 (可选)
-        if (order.getStatus() == OrderStatus.CANCELLED && newStatus != OrderStatus.CANCELLED) {
-            throw new RuntimeException("Cannot change status of cancelled order");
-        }
+        // 可以在这里添加状态流转校验逻辑
         orderRepository.updateStatus(orderId, newStatus);
     }
 

@@ -92,11 +92,12 @@ public class SellerOrderService {
         }
     }
 
-    // [修复] 使用 .status() 访问 record 属性
+    // [修复] 使用 .status() 而不是 .getStatus()，因为 DTO 是 Record
     @Transactional
     public void deleteOrderFromHistory(Long orderId, String sellerId) {
         SellerOrderDTOResponse order = getOrderDetails(orderId, sellerId);
-        String status = order.status(); // 修正：getStatus() -> status()
+        // Record 属性访问不带 get 前缀
+        String status = order.status();
 
         if (!"DELIVERED".equals(status) && !"CANCELLED".equals(status)) {
             throw new RuntimeException("Only completed or cancelled orders can be removed from history.");
