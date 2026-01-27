@@ -23,17 +23,30 @@ public class WebSecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
+                        // 1. 公开接口
                         .requestMatchers("/api/public/**", "/api/auth/**").permitAll()
 
-                        // 卖家接口：需要 SELLER 角色
-                        // 注意：Spring Security 会自动在 "SELLER" 前加 "ROLE_"，所以这里填 "SELLER" 即可
+                        // ============================================================
+                        // 🔥 核心修复点：将“申请”和“状态查询”特例化，放在通配符之前！
+                        // ============================================================
+
+                        // 允许 CUSTOMER (或所有登录用户) 访问申请接口
+                        .requestMatchers("/api/seller/apply").hasAnyRole("CUSTOMER", "SELLER")
+
+                        // 允许 CUSTOMER 查看申请状态 (否则他们不知道自己通过没)
+                        .requestMatchers("/api/seller/status").hasAnyRole("CUSTOMER", "SELLER")
+
+                        // ============================================================
+                        // 🔒 剩下的 /api/seller/** 依然必须是 SELLER 才能访问
+                        // (例如：上架商品、查看订单等)
+                        // ============================================================
                         .requestMatchers("/api/seller/**").hasRole("SELLER")
 
+                        // 其他业务接口
                         .requestMatchers("/api/cart/**", "/api/orders/**").authenticated()
                         .anyRequest().authenticated()
                 )
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        // 关键修复：注册 JWT 转换器，才能识别 Cognito 的 Group
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))
                 );
 
