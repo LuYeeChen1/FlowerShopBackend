@@ -30,12 +30,32 @@ public class SellerController {
     @PostMapping("/apply")
     public ResponseEntity<?> applyForSeller(@AuthenticationPrincipal Jwt jwt, @Valid @RequestBody SellerApplyDTORequest request) {
         try {
+            // 1. 获取 User ID (sub)
             String userId = jwt.getClaimAsString("sub");
-            sellerService.applyForSeller(userId, request);
+
+            // 2. 🔥 新增：从 Token 提取 Email 和 Username
+            // 这些是为了同步写入本地 users 表，解决外键报错问题
+            String email = jwt.getClaimAsString("email");
+            String username = jwt.getClaimAsString("username");
+
+            // 🛡️ 防御性代码：防止 username 为空 (Cognito 有时放在 cognito:username)
+            if (username == null) {
+                username = jwt.getClaimAsString("cognito:username");
+            }
+            // 如果还是空，默认使用 Email 前缀
+            if (username == null && email != null) {
+                username = email.split("@")[0];
+            }
+
+            // 3. 调用更新后的 Service 方法 (传入 4 个参数)
+            sellerService.applyForSeller(userId, email, username, request);
+
             return ResponseEntity.ok("Application submitted and approved successfully.");
         } catch (IllegalStateException e) {
             return ResponseEntity.status(409).body(e.getMessage());
         } catch (Exception e) {
+            // 打印堆栈以便调试
+            e.printStackTrace();
             return ResponseEntity.badRequest().body("提交失败: " + e.getMessage());
         }
     }

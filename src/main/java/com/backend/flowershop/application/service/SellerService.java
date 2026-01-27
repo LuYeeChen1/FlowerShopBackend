@@ -35,40 +35,44 @@ public class SellerService {
 
     /**
      * 核心交易逻辑：
+     * 0. 🔥 同步用户基础信息 (Fix FK Error)
      * 1. 检查状态
      * 2. 写入商家资料
      * 3. 调用 Lambda 修改 Cognito
      * 4. 更新本地用户角色
-     * * @Transactional 保证原子性：只要任意一步报错（比如 Lambda 挂了），
-     * 数据库里的商家资料和用户角色更新都会自动回滚，就像什么都没发生过一样。
      */
+    // 修改签名：接受 email 和 username
     @Transactional(rollbackFor = Exception.class, propagation = Propagation.REQUIRED)
-    public void applyForSeller(String userId, SellerApplyDTORequest request) {
+    public void applyForSeller(String userId, String email, String username, SellerApplyDTORequest request) {
+
+        // ==========================================================
+        // 🔍 检查点：你是否漏掉了下面这三行代码？
+        // ==========================================================
+        System.out.println("正在同步用户到本地数据库: " + userId); // 👈以此确认代码已执行
+        User currentUser = new User(userId, email, username, Role.CUSTOMER);
+        userRepository.save(currentUser);
+        // ==========================================================
+
         // 1. 幂等性校验
         Optional<String> status = sellerRepository.findStatusByUserId(userId);
         if (status.isPresent() && !SellerStatus.NONE.name().equals(status.get())) {
             throw new IllegalStateException("您已有有效的契约，无法重复提交。");
         }
 
-        // 2. 写入本地数据库 (Core Business)
+        // 2. 写入商家资料 (这里就是报错的地方，只要上面执行了，这里就不会报错)
         if (SellerType.INDIVIDUAL.name().equalsIgnoreCase(request.getApplyType())) {
             sellerRepository.saveIndividual(userId, request);
         } else {
             sellerRepository.saveBusiness(userId, request);
         }
 
-        // 3. 🚀 触发云端权限变更 (AWS Lambda -> Cognito)
-        // 如果这里抛出异常，整个事务回滚
+        // 3. 触发云端权限变更
         roleTransitionPort.promoteToSeller(userId);
 
-        // 4. 🔥 同步更新本地 Users 表的角色状态 🔥
-        // 这一步是为了保持数据一致性。虽然 Token 还没刷新，但数据库必须先是对的。
+        // 4. 更新本地角色
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found for ID: " + userId));
-
         user.setRole(Role.SELLER);
         userRepository.save(user);
-
-        // 此时事务提交，数据库状态锁定为 SELLER
     }
 }
