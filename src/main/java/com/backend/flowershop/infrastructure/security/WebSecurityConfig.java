@@ -2,10 +2,9 @@ package com.backend.flowershop.infrastructure.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter; // 必须引入
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -23,26 +22,16 @@ public class WebSecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
-                        // 1. 公开接口
+                        // 1. 公開接口
                         .requestMatchers("/api/public/**", "/api/auth/**").permitAll()
 
-                        // ============================================================
-                        // 🔥 核心修复点：将“申请”和“状态查询”特例化，放在通配符之前！
-                        // ============================================================
+                        // 2. 賣家申請相關 (允許普通用戶申請)
+                        .requestMatchers("/api/seller/apply", "/api/seller/status").hasAnyRole("CUSTOMER", "SELLER")
 
-                        // 允许 CUSTOMER (或所有登录用户) 访问申请接口
-                        .requestMatchers("/api/seller/apply").hasAnyRole("CUSTOMER", "SELLER")
-
-                        // 允许 CUSTOMER 查看申请状态 (否则他们不知道自己通过没)
-                        .requestMatchers("/api/seller/status").hasAnyRole("CUSTOMER", "SELLER")
-
-                        // ============================================================
-                        // 🔒 剩下的 /api/seller/** 依然必须是 SELLER 才能访问
-                        // (例如：上架商品、查看订单等)
-                        // ============================================================
+                        // 3. 賣家專屬接口
                         .requestMatchers("/api/seller/**").hasRole("SELLER")
 
-                        // 其他业务接口
+                        // 4. 其他認證接口
                         .requestMatchers("/api/cart/**", "/api/orders/**").authenticated()
                         .anyRequest().authenticated()
                 )
@@ -56,7 +45,6 @@ public class WebSecurityConfig {
     @Bean
     public JwtAuthenticationConverter jwtAuthenticationConverter() {
         JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
-        // 使用您编写的 JwtRoleConverter
         converter.setJwtGrantedAuthoritiesConverter(new JwtRoleConverter());
         return converter;
     }
@@ -64,10 +52,20 @@ public class WebSecurityConfig {
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH" , "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+
+        // 🔥 核心修復：加入你截圖中顯示的所有來源網址
+        configuration.setAllowedOrigins(List.of(
+                "http://localhost:5173", // 本機開發
+                "https://flora-shops.com", // 正式域名
+                "https://api.flora-shops.com", // API 域名
+                "https://flora-ecom-frontend-dldfuvqmi-luyeechen1s-projects.vercel.app" // Vercel 預覽網址
+        ));
+
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With", "Accept"));
         configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L); // 快取預檢請求一小時
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
         return source;
