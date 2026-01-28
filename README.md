@@ -1,2 +1,1 @@
-# FlowerShopBackend
-build a website for flower shop
+# ALL EXPLAIN PLEASE REFER FLORA-ECOM-BACKEND
